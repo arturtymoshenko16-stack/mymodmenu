@@ -15,11 +15,8 @@ jobs:
 
     - name: Unpack and Restore Original Project
       run: |
-        # Розпаковуємо архів
         unzip -o MOD_MENU_final_v18.zip
         rm MOD_MENU_final_v18.zip
-        
-        # Переміщуємо оригінальні файли розробника в корінь проекту
         if [ -d "MOD_MENU_HACK_3.0_BUILD_SOURCE" ]; then
           mv MOD_MENU_HACK_3.0_BUILD_SOURCE/* . 2>/dev/null || true
           mv MOD_MENU_HACK_3.0_BUILD_SOURCE/.* . 2>/dev/null || true
@@ -32,21 +29,46 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Update Gradle Wrapper and Injection Config
+    - name: Clean App Configuration
       run: |
-        # Створюємо чистий запуск Gradle версії 8.2 (виправляє сумісність із Java 17)
+        # Оновлюємо версію Gradle для сумісності з сервером
         gradle wrapper --gradle-version 8.2
         chmod +x gradlew
 
-        # Модифікуємо оригінальний app/build.gradle, додаючи розділення на 32-біт та 64-біт APK
-        if [ -f "app/build.gradle" ]; then
-          sed -i '/android {/a \    splits { abi { enable true; reset(); include "armeabi-v7a", "arm64-v8a"; universalApk false } }' app/build.gradle
-          sed -i '/defaultConfig {/a \        ndk { abiFilters "armeabi-v7a", "arm64-v8a" }' app/build.gradle
-        fi
+        # Перезаписуємо app/build.gradle чистою конфігурацією без конфліктів
+        cat << 'EOF' > app/build.gradle
+        plugins {
+            id 'com.android.application'
+        }
+        android {
+            compileSdk 34
+            namespace "com.android.support"
+            defaultConfig {
+                applicationId "com.android.support"
+                minSdk 21
+                targetSdk 34
+                versionCode 1
+                versionName "3.0"
+            }
+            splits {
+                abi {
+                    enable true
+                    reset()
+                    include "armeabi-v7a", "arm64-v8a"
+                    universalApk false
+                }
+            }
+            externalNativeBuild {
+                cmake {
+                    path "src/main/cpp/CMakeLists.txt"
+                    version "3.22.1"
+                }
+            }
+        }
+        EOF
 
     - name: Build 32-bit and 64-bit APK and SO
       run: |
-        # Запуск оригінальної збірки додатка
         ./gradlew assembleRelease --no-daemon
 
     - name: Pack and Upload APKs
