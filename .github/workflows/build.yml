@@ -15,14 +15,13 @@ jobs:
 
     - name: Unpack and Setup Project
       run: |
-        # 1. Розпаковуємо ваш архів
         unzip -o MOD_MENU_final_v18.zip
         rm MOD_MENU_final_v18.zip
-        
-        # 2. Переміщуємо файли з папки MOD_MENU_HACK_3.0_BUILD_SOURCE у корінь
-        mv MOD_MENU_HACK_3.0_BUILD_SOURCE/* . 2>/dev/null || true
-        mv MOD_MENU_HACK_3.0_BUILD_SOURCE/.* . 2>/dev/null || true
-        rm -rf MOD_MENU_HACK_3.0_BUILD_SOURCE
+        if [ -d "MOD_MENU_HACK_3.0_BUILD_SOURCE" ]; then
+          mv MOD_MENU_HACK_3.0_BUILD_SOURCE/* . 2>/dev/null || true
+          mv MOD_MENU_HACK_3.0_BUILD_SOURCE/.* . 2>/dev/null || true
+          rm -rf MOD_MENU_HACK_3.0_BUILD_SOURCE
+        fi
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -30,16 +29,11 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Setup Gradle
+    - name: Upgrade Gradle Version
       run: |
-        # Гарантовано робимо оригінальний градл виконуваним
-        if [ -f "gradlew" ]; then
-          chmod +x gradlew
-        else
-          # Якщо його не було, створюємо робочу обгортку
-          gradle wrapper --gradle-version 8.1.1
-          chmod +x gradlew
-        fi
+        # Примусово оновлюємо Gradle до версії 8.2, яку просить сервер
+        gradle wrapper --gradle-version 8.2
+        chmod +x gradlew
 
     - name: Build 32-bit and 64-bit APK and SO
       run: |
