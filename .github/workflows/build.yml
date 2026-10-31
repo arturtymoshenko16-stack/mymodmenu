@@ -13,10 +13,47 @@ jobs:
     - name: Checkout Source Code
       uses: actions/checkout@v4
 
-    - name: Unpack and Check Files
+    - name: Unpack Project Files
       run: |
         unzip -o MOD_MENU_final_v18.zip
         rm MOD_MENU_final_v18.zip
-        echo "=== СПИСОК ВСІХ ФАЙЛІВ В АРХІВІ ==="
-        find . -maxdepth 3
+        
+        # Автоматически находим, куда распаковался build.gradle, и переносим всё в корень
+        PROJECT_DIR=$(find . -name "build.gradle" -not -path "*/.github/*" -exec dirname {} \; | head -n 1)
+        if [ -n "$PROJECT_DIR" ] && [ "$PROJECT_DIR" != "." ]; then
+          echo "Проект найден в папке: $PROJECT_DIR. Переносим файлы..."
+          mv $PROJECT_DIR/* . 2>/dev/null || true
+          mv $PROJECT_DIR/.* . 2>/dev/null || true
+        fi
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+
+    - name: Setup Android Build Tools
+      run: |
+        # Если в архиве не оказалось файлов gradlew, генерируем их заново
+        if [ ! -f "gradlew" ]; then
+          gradle wrapper
+        else
+          chmod +x gradlew
+        fi
+
+    - name: Compile 32-bit and 64-bit APK and SO
+      run: |
+        ./gradlew assembleRelease --no-daemon
+
+    - name: Upload Finished APKs
+      uses: actions/upload-artifact@v4
+      with:
+        name: Finished-APKs
+        path: "**/build/outputs/apk/release/*.apk"
+
+    - name: Upload Native SO Libraries
+      uses: actions/upload-artifact@v4
+      with:
+        name: Native-SO-Libraries
+        path: "**/build/intermediates/cmake/release/obj/"
         
