@@ -13,10 +13,13 @@ jobs:
     - name: Checkout Source Code
       uses: actions/checkout@v4
 
-    - name: Unpack and Setup Project
+    - name: Unpack and Restore Original Project
       run: |
+        # Розпаковуємо архів
         unzip -o MOD_MENU_final_v18.zip
         rm MOD_MENU_final_v18.zip
+        
+        # Переміщуємо оригінальні файли розробника в корінь проекту
         if [ -d "MOD_MENU_HACK_3.0_BUILD_SOURCE" ]; then
           mv MOD_MENU_HACK_3.0_BUILD_SOURCE/* . 2>/dev/null || true
           mv MOD_MENU_HACK_3.0_BUILD_SOURCE/.* . 2>/dev/null || true
@@ -29,14 +32,21 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Upgrade Gradle Version
+    - name: Update Gradle Wrapper and Injection Config
       run: |
-        # Примусово оновлюємо Gradle до версії 8.2, яку просить сервер
+        # Створюємо чистий запуск Gradle версії 8.2 (виправляє сумісність із Java 17)
         gradle wrapper --gradle-version 8.2
         chmod +x gradlew
 
+        # Модифікуємо оригінальний app/build.gradle, додаючи розділення на 32-біт та 64-біт APK
+        if [ -f "app/build.gradle" ]; then
+          sed -i '/android {/a \    splits { abi { enable true; reset(); include "armeabi-v7a", "arm64-v8a"; universalApk false } }' app/build.gradle
+          sed -i '/defaultConfig {/a \        ndk { abiFilters "armeabi-v7a", "arm64-v8a" }' app/build.gradle
+        fi
+
     - name: Build 32-bit and 64-bit APK and SO
       run: |
+        # Запуск оригінальної збірки додатка
         ./gradlew assembleRelease --no-daemon
 
     - name: Pack and Upload APKs
