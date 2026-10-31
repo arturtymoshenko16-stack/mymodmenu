@@ -13,36 +13,96 @@ jobs:
     - name: Checkout Source Code
       uses: actions/checkout@v4
 
-    - name: Unpack Project Files
-      run: |
-        unzip -o MOD_MENU_final_v18.zip
-        rm MOD_MENU_final_v18.zip
-        
-        # Автоматически находим, куда распаковался build.gradle, и переносим всё в корень
-        PROJECT_DIR=$(find . -name "build.gradle" -not -path "*/.github/*" -exec dirname {} \; | head -n 1)
-        if [ -n "$PROJECT_DIR" ] && [ "$PROJECT_DIR" != "." ]; then
-          echo "Проект найден в папке: $PROJECT_DIR. Переносим файлы..."
-          mv $PROJECT_DIR/* . 2>/dev/null || true
-          mv $PROJECT_DIR/.* . 2>/dev/null || true
-        fi
-
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Setup Android Build Tools
+    - name: Rebuild Project Structure and Compile
       run: |
-        # Если в архиве не оказалось файлов gradlew, генерируем их заново
-        if [ ! -f "gradlew" ]; then
-          gradle wrapper
-        else
-          chmod +x gradlew
-        fi
+        # 1. Розпаковуємо ваш архів у тимчасову папку
+        mkdir temp_source
+        unzip -o MOD_MENU_final_v18.zip -d temp_source/
+        rm MOD_MENU_final_v18.zip
+        
+        # 2. Знаходимо, де всередині лежить папка src (вихідний код)
+        SRC_DIR=$(find temp_source -type d -name "src" | head -n 1)
+        echo "Папку з вихідним кодом знайдено тут: $SRC_DIR"
+        
+        # 3. Створюємо новий чистий Android-проект прямо на сервері
+        mkdir -p app/src
+        cp -r $SRC_DIR/* app/src/
+        
+        # 4. Створюємо правильні файли конфігурації Gradle
+        cat << 'EOF' > settings.gradle
+        pluginManagement {
+            repositories {
+                google()
+                mavenCentral()
+                gradlePluginPortal()
+            }
+        }
+        dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+        rootProject.name = "ModMenuProject"
+        include ':app'
+        EOF
 
-    - name: Compile 32-bit and 64-bit APK and SO
-      run: |
+        cat << 'EOF' > build.gradle
+        plugins {
+            id 'com.android.application' version '8.1.1' apply false
+        }
+        EOF
+
+        cat << 'EOF' > app/build.gradle
+        plugins {
+            id 'com.android.application'
+        }
+        android {
+            compileSdk 34
+            namespace "com.android.support"
+            defaultConfig {
+                applicationId "com.android.support"
+                minSdk 21
+                targetSdk 34
+                versionCode 1
+                versionName "3.0"
+                ndk { abiFilters "armeabi-v7a", "arm64-v8a" }
+                externalNativeBuild {
+                    cmake {
+                        cppFlags "-frtti -fexceptions"
+                        abiFilters "armeabi-v7a", "arm64-v8a"
+                    }
+                }
+            }
+            splits {
+                abi {
+                    enable true
+                    reset()
+                    include "armeabi-v7a", "arm64-v8a"
+                    universalApk false
+                }
+            }
+            externalNativeBuild {
+                cmake {
+                    path "src/main/cpp/CMakeLists.txt"
+                    version "3.22.1"
+                }
+            }
+        }
+        EOF
+
+        # 5. Генеруємо свіжі та робочі файли запуску Gradle
+        gradle wrapper --gradle-version 8.1.1
+        chmod +x gradlew
+        
+        # 6. Запускаємо фінальну компіляцію
         ./gradlew assembleRelease --no-daemon
 
     - name: Upload Finished APKs
