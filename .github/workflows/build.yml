@@ -29,13 +29,13 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Clean App Configuration
+    - name: Clean App Configuration and Fix Paths
       run: |
-        # Оновлюємо версію Gradle для сумісності з сервером
+        # Обновляем Gradle
         gradle wrapper --gradle-version 8.2
         chmod +x gradlew
 
-        # Перезаписуємо app/build.gradle чистою конфігурацією без конфліктів
+        # Создаем конфигурацию, которая автоматически подключает все папки с заголовочными файлами (.h)
         cat << 'EOF' > app/build.gradle
         plugins {
             id 'com.android.application'
@@ -49,6 +49,13 @@ jobs:
                 targetSdk 34
                 versionCode 1
                 versionName "3.0"
+                externalNativeBuild {
+                    cmake {
+                        // Передаем компилятору флаг искать во всех папках внутри cpp, включая Includes
+                        cppFlags "-frtti -fexceptions -I${projectDir}/src/main/cpp -I${projectDir}/src/main/cpp/Includes -I${projectDir}/src/main/cpp/includes"
+                        abiFilters "armeabi-v7a", "arm64-v8a"
+                    }
+                }
             }
             splits {
                 abi {
